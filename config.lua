@@ -1,7 +1,7 @@
 Config = {}
 
 
-+ = 5000
+Config.Payment = 5000
 Config.MaxHostileAmount = 2
 
 
