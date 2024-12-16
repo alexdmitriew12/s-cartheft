@@ -1,10 +1,14 @@
 Config = {}
 
 
++ = 5000
+Config.MaxHostileAmount = 2
+
 
 Config.spawnLocations = {
-    {x = -571.69, y = 337.68},
-    {x = -1309.58, y = 251.28},
+    -- {x = -571.69, y = 337.68},
+    {x = -1300.5, y = 265.67, z = 63.58},
+
 }
 
 Config.deliveryLocations = {
@@ -14,16 +18,22 @@ Config.deliveryLocations = {
 
 } 
 
+Config.MaxHostileAmount = 2
+
+
 
 Config.Peds = {
-    pedSpawner = {
+    locations = {
         {x = 693.94, y = -728.67, z = 25.31, h = 5.48, ["hash"] = "a_m_m_og_boss_01"},
 
     }
 }
 Config.Vehicles = {
-    3990165190,
-    1118611807,
+    523724515, --vooodo2
+    3469130167, --vigero
+    1043222410, -- tula
+    1123216662, -- superd
+    3893323758, -- stalion2
 
 }
 
