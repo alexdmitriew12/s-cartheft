@@ -10,7 +10,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
 window.addEventListener('message', (e) => {
     if(!UI || !items) {
-        console.error("UI error");
         return;
     }
 
@@ -34,5 +33,4 @@ missionEasy.addEventListener('click', () => {
         method: 'POST' 
     }).then(response => response.json())
         .then(data => console.log(data))
-        .catch(error => console.error('Error:', error));
 });

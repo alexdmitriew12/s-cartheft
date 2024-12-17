@@ -1,8 +1,8 @@
 fx_version 'cerulean'
 game 'gta5'
 
-author 'wx / woox'
-description 'Advanced recoil system for FiveM'
+author 'szefunio'
+description 'Vehicle theft mission script for FiveM'
 
 client_scripts {
     'client/client.lua',
@@ -20,7 +20,6 @@ files {
     'ui/index.html',
     'ui/style.css',
     'ui/script.js',
-    'ui/img/*.png',
 
 }
 

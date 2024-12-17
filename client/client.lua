@@ -40,11 +40,24 @@ RegisterNUICallback('closeUI', function()
     })
 end)
 
+local function missionStart()
+    local indexLocation = math.random(1, #Config.spawnLocations)
+    local chosenLocation = Config.spawnLocations[indexLocation]
+
+    local indexVehicle = math.random(1, #Config.Vehicles)
+    local chosenVehicle = Config.Vehicles[indexVehicle]
+
+    local displayName = GetDisplayNameFromVehicleModel(chosenVehicle)
+    local vehicleName = GetLabelText(displayName)
+
+    TriggerEvent('createVehicle', chosenVehicle, chosenLocation.x, chosenLocation.y, chosenLocation.z)
+    TriggerEvent('QBCore:Notify', "The location has been marked, your vehicle: " .. vehicleName, "success")
+
+    SetNewWaypoint(chosenLocation.x, chosenLocation.y)
+    TriggerServerEvent("s-cartheft:server:spawnNPC", chosenLocation)
+end
 
 RegisterNUICallback('mission-easy', function(data, cb)
-    print("Misja rozpoczęta")
-    cb('ok')
-
     missionStart()
     
 end)
@@ -52,7 +65,9 @@ end)
 RegisterNetEvent('createVehicle', function(vehHash, x, y, z)
     local modelHash = vehHash
     RequestModel(modelHash)
-    local vehicle = CreateVehicle(modelHash, x, y, z, true, true)
+    while not HasModelLoaded(modelHash) do
+        Wait(100)
+    end    local vehicle = CreateVehicle(modelHash, x, y, z, true, true)
     if DoesEntityExist(vehicle) then
         SetEntityAsMissionEntity(vehicle, true, true)
         local netId = NetworkGetNetworkIdFromEntity(vehicle)
@@ -65,22 +80,17 @@ RegisterNetEvent('createVehicle', function(vehHash, x, y, z)
 end)
 
 
-function missionStart()
-    local indexLocation = math.random(1, #Config.spawnLocations)
-    local chosenLocation = Config.spawnLocations[indexLocation]
-    local indexVehicle = math.random(1, #Config.Vehicles)
-    local chosenVehicle = Config.Vehicles[indexVehicle]
-
-    TriggerEvent('createVehicle', chosenVehicle, chosenLocation.x, chosenLocation.y, chosenLocation.z)
-    TriggerEvent('QBCore:Notify', "The location has been marked!", "success")
 
 
-    SetNewWaypoint(chosenLocation.x, chosenLocation.y)
-    TriggerServerEvent("s-cartheft:server:spawnNPC", chosenLocation)
 
+local function PoliceCall()
+    local random = math.random(1, 100)
+    if random <= Config.PoliceCallChance then
+        TriggerServerEvent('police:server:policeAlert', 'Vehicle theft')
+    end
 end
 
-function missionDelivery()
+local function missionDelivery()
     local veh = GetVehiclePedIsIn(PlayerPedId(), false)
     if not veh or veh == 0 then
         print("No vehicle found.")
@@ -91,11 +101,12 @@ function missionDelivery()
     local chosenLocation = Config.deliveryLocations[indexLocation]
     TriggerEvent('QBCore:Notify', "Deliver the vehicle to the marked location!", "success")
     SetNewWaypoint(chosenLocation.x, chosenLocation.y)
+    PoliceCall()
 
     TriggerEvent("startDeliveryMission", veh, chosenLocation.x, chosenLocation.y, chosenLocation.z)
 end
 
-function spawnNPC(coords)
+local function spawnNPC(coords)
     local npcModels = {
         "g_m_importexport_01", 
         "g_m_m_armgoon_01",  
@@ -132,10 +143,12 @@ function spawnNPC(coords)
 
         local playerPed = PlayerPedId()
         TaskCombatPed(npc, playerPed, 0, 16)
-        -- GiveWeaponToPed(npc, GetHashKey("WEAPON_PISTOL"), 50, false, true)
+        -- GiveWeaponToPed(npc, GetHashKey("WEAPON_PISTOL"), 50, false, true) uncomment if u want to peds have a weapon
 
     end
 end
+
+
 
 
 
@@ -180,7 +193,6 @@ Citizen.CreateThread(function()
         if IsPedInAnyVehicle(PlayerPedId(), false) then
             local veh = GetVehiclePedIsIn(PlayerPedId(), false)
             if veh == myVehicle then
-                print("You are in the scripted vehicle.")
                 missionDelivery()
                 break
             end
