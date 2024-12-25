@@ -1,5 +1,6 @@
 local QBCore = exports['qb-core']:GetCoreObject()
 local myVehicle = nil
+local missionActive = false
 
 for _, pedCoords in ipairs(Config.Peds.locations) do
     RequestModel(GetHashKey(pedCoords['hash']))
@@ -40,34 +41,96 @@ RegisterNUICallback('closeUI', function()
     })
 end)
 
-local function missionStart()
-    local indexLocation = math.random(1, #Config.spawnLocations)
-    local chosenLocation = Config.spawnLocations[indexLocation]
 
-    local indexVehicle = math.random(1, #Config.Vehicles)
-    local chosenVehicle = Config.Vehicles[indexVehicle]
+local function createBlip(blipX, blipY, blipZ, radius)
+    if missionActive then
+        blipRadius = AddBlipForRadius(blipX, blipY, blipZ, radius)
+        SetBlipColour(blipRadius, 1)
+        SetBlipAlpha(blipRadius, 128)
+
+        nameBlip = AddBlipForCoord(blipX, blipY, blipZ)
+        SetBlipSprite(nameBlip, 229) 
+        SetBlipColour(nameBlip, 5)
+        SetBlipScale(nameBlip, 0.75)
+        BeginTextCommandSetBlipName("STRING")
+        AddTextComponentString("Vehicle Search Zone")
+        EndTextCommandSetBlipName(nameBlip)
+    else
+        if DoesBlipExist(blipRadius) then
+            RemoveBlip(blipRadius)
+            blipRadius = nil
+        end
+
+        if DoesBlipExist(nameBlip) then
+            RemoveBlip(nameBlip)
+            nameBlip = nil
+        end
+    end
+end
+
+
+local function missionStart(missionType)
+    local chosenVehicles = {}
+
+    if missionType == "easy" then
+        chosenVehicles = Config.CivilianVehicles
+    elseif missionType == "medium" then
+        chosenVehicles = Config.GangVehicles
+    elseif missionType == "hard" then
+        chosenVehicles = Config.MilitaryVehicles
+    end
+
+    local zoneIndex = math.random(1, #Config.Zones)
+    local chosenZone = Config.Zones[zoneIndex]
+
+    local spawnIndex = math.random(1, #chosenZone.spawns)
+    local spawnPoint = chosenZone.spawns[spawnIndex]
+
+    local indexVehicle = math.random(1, #chosenVehicles)
+    local chosenVehicle = chosenVehicles[indexVehicle]
 
     local displayName = GetDisplayNameFromVehicleModel(chosenVehicle)
     local vehicleName = GetLabelText(displayName)
 
-    TriggerEvent('createVehicle', chosenVehicle, chosenLocation.x, chosenLocation.y, chosenLocation.z)
+    missionActive = true
+    TriggerEvent('createVehicle', chosenVehicle, spawnPoint.x, spawnPoint.y, spawnPoint.z)
     TriggerEvent('QBCore:Notify', "The location has been marked, your vehicle: " .. vehicleName, "success")
 
-    SetNewWaypoint(chosenLocation.x, chosenLocation.y)
-    TriggerServerEvent("s-cartheft:server:spawnNPC", chosenLocation)
+    createBlip(chosenZone.center.x, chosenZone.center.y, chosenZone.center.z, chosenZone.radius)
+
+    if missionType == "medium" or missionType == "hard" then
+        TriggerServerEvent("s-cartheft:server:spawnNPC", spawnPoint, missionType)
+    end
 end
 
+
 RegisterNUICallback('mission-easy', function(data, cb)
-    missionStart()
-    
+    missionStart("easy")
 end)
 
+RegisterNUICallback('mission-medium', function(data, cb)
+    missionStart("medium")
+end)
+
+RegisterNUICallback('mission-hard', function(data, cb)
+    missionStart("hard")
+end)
+
+
 RegisterNetEvent('createVehicle', function(vehHash, x, y, z)
+    if myVehicle then
+        if DoesEntityExist(myVehicle) then
+            DeleteVehicle(myVehicle)
+        end
+    end
+
     local modelHash = vehHash
     RequestModel(modelHash)
     while not HasModelLoaded(modelHash) do
         Wait(100)
-    end    local vehicle = CreateVehicle(modelHash, x, y, z, true, true)
+    end
+
+    local vehicle = CreateVehicle(modelHash, x, y, z, true, true)
     if DoesEntityExist(vehicle) then
         SetEntityAsMissionEntity(vehicle, true, true)
         local netId = NetworkGetNetworkIdFromEntity(vehicle)
@@ -106,45 +169,70 @@ local function missionDelivery()
     TriggerEvent("startDeliveryMission", veh, chosenLocation.x, chosenLocation.y, chosenLocation.z)
 end
 
-local function spawnNPC(coords)
-    local npcModels = {
-        "g_m_importexport_01", 
-        "g_m_m_armgoon_01",  
-        "u_m_y_babyd",       
-        "g_m_m_chigoon_01",    
-        "g_m_y_korean_01",    
-        "g_m_m_chigoon_02",    
-        "g_m_m_korboss_01",    
-        "g_m_y_korean_02" 
-
+local function spawnNPC(coords, missionType)
+    local GangNpcModels = {
+        "g_m_importexport_01",
+        "g_m_m_armgoon_01",
+        "u_m_y_babyd",
+        "g_m_m_chigoon_01",
+        "g_m_y_korean_01",
+        "g_m_m_chigoon_02",
+        "g_m_m_korboss_01",
+        "g_m_y_korean_02"
     }
-    local maxAmount = Config.MaxHostileAmount
-    local amount = math.random(1, maxAmount)
 
+    local MilitaryNpcModels = {
+        "s_m_y_blackops_01",
+        "s_m_y_blackops_02",
+        "s_m_y_blackops_03"
+    }
+
+    local npcModels = {}
+    local maxAmount = 1 
+    local weaponList = {} 
+
+
+    if missionType == "medium" then
+        npcModels = GangNpcModels
+        maxAmount = Config.MediumMaxHostileAmount
+        weaponList = Config.WeaponList.medium
+    elseif missionType == "hard" then
+        npcModels = MilitaryNpcModels
+        maxAmount = Config.HardMaxHostileAmount
+        weaponList = Config.WeaponList.hard
+    else
+        print("Invalid mission type: " .. tostring(missionType))
+        return
+    end
+
+    local amount = math.random(1, maxAmount)
 
     for i = 1, amount do
         local randomIndex = math.random(1, #npcModels)
         local model = npcModels[randomIndex]
 
+        local weaponIndex = math.random(1, #weaponList)
+        local chosenWeapon = weaponList[weaponIndex]
+
         RequestModel(GetHashKey(model))
-        while HasModelLoaded(GetHashKey(model)) == false do
+        while not HasModelLoaded(GetHashKey(model)) do
             Wait(100)
         end
-        local offsetX = math.random(-7, 7)
-        local offsetY = math.random(-7, 7)
 
+        local offsetX = math.random(-10, 10)
+        local offsetY = math.random(-10, 10)
 
-        local npc = CreatePed(4, GetHashKey(model), coords.x + offsetX, coords.y - offsetY, coords.z, 0.0, true, true)
-        SetPedCombatAttributes (npc, 46, true)
+        local npc = CreatePed(4, GetHashKey(model), coords.x + offsetX, coords.y + offsetY, coords.z, 0.0, true, true)
+        SetPedCombatAttributes(npc, 46, true)
         SetPedCombatAbility(npc, 2)
         SetPedCombatRange(npc, 2)
         SetPedFleeAttributes(npc, 0, false)
         SetPedAccuracy(npc, 70)
 
+        GiveWeaponToPed(npc, GetHashKey(chosenWeapon), 9999, false, true)
+
         local playerPed = PlayerPedId()
         TaskCombatPed(npc, playerPed, 0, 16)
-        -- GiveWeaponToPed(npc, GetHashKey("WEAPON_PISTOL"), 50, false, true) uncomment if u want to peds have a weapon
-
     end
 end
 
@@ -152,19 +240,22 @@ end
 
 
 
+
+
+
 RegisterNetEvent("spawnNPC")
-AddEventHandler("spawnNPC", function(coords)
-    spawnNPC(coords)
+AddEventHandler("spawnNPC", function(coords, missionType)
+    spawnNPC(coords, missionType)
 end)
 
 RegisterNetEvent('startDeliveryMission')
 AddEventHandler('startDeliveryMission', function(veh, deliveryX, deliveryY, deliveryZ)
     local playerPed = PlayerPedId()
-    local isMissionActive = true
     local amount = Config.Payment
+    missionActive = true
 
     Citizen.CreateThread(function()
-        while isMissionActive do
+        while missionActive do
             Citizen.Wait(1000)
             if IsPedInAnyVehicle(playerPed, false) then
                 local currentVeh = GetVehiclePedIsIn(playerPed, false)
@@ -172,11 +263,12 @@ AddEventHandler('startDeliveryMission', function(veh, deliveryX, deliveryY, deli
                     local playerCoords = GetEntityCoords(playerPed)
                     local dist = Vdist(playerCoords.x, playerCoords.y, playerCoords.z, deliveryX, deliveryY, deliveryZ)
                     if dist < 20.0 then
-                        TriggerEvent('QBCore:Notify', "Vehicle delivered successfully, you recevied your payment!", "success")
-                        if DoesEntityExist(veh) and IsPedInAnyVehicle(playerPed, false) then
+                        TriggerEvent('QBCore:Notify', "Vehicle delivered successfully, you received your payment!", "success")
+                        if DoesEntityExist(veh) then
                             DeleteVehicle(currentVeh)
                         end
-                        isMissionActive = false
+                        missionActive = false
+                        createBlip(0, 0, 0, 0) 
                         TriggerServerEvent("s-cartheft:server:addMoney", amount)
                     end
                 end
@@ -184,7 +276,6 @@ AddEventHandler('startDeliveryMission', function(veh, deliveryX, deliveryY, deli
         end
     end)
 end)
-
 
 
 Citizen.CreateThread(function()

@@ -1,6 +1,8 @@
 const UI = document.getElementById("main");
 const itemsContainer = document.getElementById("items");
 const missionEasy = document.getElementById("mission-easy");
+const missionMedium = document.getElementById("mission-medium");
+
 
 window.addEventListener('DOMContentLoaded', () => {
     if(UI) {
@@ -30,6 +32,13 @@ document.getElementById('close')?.addEventListener('click', () => {
 
 missionEasy.addEventListener('click', () => {
     fetch(`https://${GetParentResourceName()}/mission-easy`, {
+        method: 'POST' 
+    }).then(response => response.json())
+        .then(data => console.log(data))
+});
+
+missionMedium.addEventListener('click', () => {
+    fetch(`https://${GetParentResourceName()}/mission-medium`, {
         method: 'POST' 
     }).then(response => response.json())
         .then(data => console.log(data))

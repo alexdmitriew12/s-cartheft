@@ -8,9 +8,9 @@ RegisterNetEvent('s-cartheft:server:addMoney', function(amount)
 end)
 
 RegisterNetEvent('s-cartheft:server:spawnNPC')
-AddEventHandler('s-cartheft:server:spawnNPC', function(location)
+AddEventHandler('s-cartheft:server:spawnNPC', function(location, missionType)
     if location ~= nil then
-        TriggerClientEvent('spawnNPC', -1, location)
+        TriggerClientEvent('spawnNPC', -1, location, missionType)
     else
         print("Error: Location is nil")
     end
