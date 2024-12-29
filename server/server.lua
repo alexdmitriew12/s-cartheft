@@ -7,6 +7,9 @@ RegisterNetEvent('s-cartheft:server:addMoney', function(amount)
     xPlayer.Functions.AddMoney('cash', amount)
 end)
 
+
+
+
 RegisterNetEvent('s-cartheft:server:spawnNPC')
 AddEventHandler('s-cartheft:server:spawnNPC', function(location, missionType)
     if location ~= nil then

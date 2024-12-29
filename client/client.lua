@@ -1,6 +1,7 @@
 local QBCore = exports['qb-core']:GetCoreObject()
 local myVehicle = nil
 local missionActive = false
+local currentMissionType = nil
 
 for _, pedCoords in ipairs(Config.Peds.locations) do
     RequestModel(GetHashKey(pedCoords['hash']))
@@ -29,9 +30,9 @@ end
 RegisterNetEvent('s-cartheft:client:openUI', function()
     SetNuiFocus(true, true)
     SendNUIMessage({
-        action = 'open'
+        action = 'open',
+        activeMission = currentMissionType
     })
-
 end)
 
 RegisterNUICallback('closeUI', function()
@@ -40,7 +41,6 @@ RegisterNUICallback('closeUI', function()
         action = 'close'
     })
 end)
-
 
 local function createBlip(blipX, blipY, blipZ, radius)
     if missionActive then
@@ -69,19 +69,47 @@ local function createBlip(blipX, blipY, blipZ, radius)
 end
 
 
+RegisterNUICallback('cancelMission', function(data, cb)
+    if missionActive then
+        missionActive = false
+        currentMissionType = nil
+        createBlip(0, 0, 0, 0) 
+        TriggerEvent('QBCore:Notify', "Mission canceled. You can now start a new mission.", "error")
+        SendNUIMessage({
+            action = 'completeMission'
+        })
+    else
+        TriggerEvent('QBCore:Notify', "No active mission to cancel.", "error")
+    end
+end)
+
+
+
 local function missionStart(missionType)
+
+    if currentMissionType then
+        TriggerEvent('QBCore:Notify', "You already have an active mission!", "error")
+        return
+    end
+    currentMissionType = missionType
+
+
     local chosenVehicles = {}
+    local chosenZone = nil
 
     if missionType == "easy" then
         chosenVehicles = Config.CivilianVehicles
+        local zoneIndex = math.random(1, #Config.Zones)
+        chosenZone = Config.Zones[zoneIndex]
     elseif missionType == "medium" then
         chosenVehicles = Config.GangVehicles
+        local zoneIndex = math.random(1, #Config.Zones)
+        chosenZone = Config.Zones[zoneIndex]
     elseif missionType == "hard" then
         chosenVehicles = Config.MilitaryVehicles
+        local zoneIndex = math.random(1, #Config.MilitaryZones)
+        chosenZone = Config.MilitaryZones[zoneIndex]
     end
-
-    local zoneIndex = math.random(1, #Config.Zones)
-    local chosenZone = Config.Zones[zoneIndex]
 
     local spawnIndex = math.random(1, #chosenZone.spawns)
     local spawnPoint = chosenZone.spawns[spawnIndex]
@@ -102,6 +130,7 @@ local function missionStart(missionType)
         TriggerServerEvent("s-cartheft:server:spawnNPC", spawnPoint, missionType)
     end
 end
+
 
 
 RegisterNUICallback('mission-easy', function(data, cb)
@@ -166,7 +195,7 @@ local function missionDelivery()
     SetNewWaypoint(chosenLocation.x, chosenLocation.y)
     PoliceCall()
 
-    TriggerEvent("startDeliveryMission", veh, chosenLocation.x, chosenLocation.y, chosenLocation.z)
+    TriggerEvent("startDeliveryMission", veh, chosenLocation.x, chosenLocation.y, chosenLocation.z, missionType)
 end
 
 local function spawnNPC(coords, missionType)
@@ -249,10 +278,18 @@ AddEventHandler("spawnNPC", function(coords, missionType)
 end)
 
 RegisterNetEvent('startDeliveryMission')
-AddEventHandler('startDeliveryMission', function(veh, deliveryX, deliveryY, deliveryZ)
+AddEventHandler('startDeliveryMission', function(veh, deliveryX, deliveryY, deliveryZ, missionType)
     local playerPed = PlayerPedId()
-    local amount = Config.Payment
+    local amount = 0
     missionActive = true
+
+    if missionType == "hard" then
+        amount = Config.HardPayment
+    elseif missionType == "medium" then
+        amount = Config.MediumPayment
+    else
+        amount = Config.EasyPayment
+    end
 
     Citizen.CreateThread(function()
         while missionActive do
@@ -268,6 +305,7 @@ AddEventHandler('startDeliveryMission', function(veh, deliveryX, deliveryY, deli
                             DeleteVehicle(currentVeh)
                         end
                         missionActive = false
+                        currentMissionType = nil
                         createBlip(0, 0, 0, 0) 
                         TriggerServerEvent("s-cartheft:server:addMoney", amount)
                     end
