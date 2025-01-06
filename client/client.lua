@@ -2,6 +2,7 @@ local QBCore = exports['qb-core']:GetCoreObject()
 local myVehicle = nil
 local missionActive = false
 local currentMissionType = nil
+local vehicleCheckThread = nil
 
 for _, pedCoords in ipairs(Config.Peds.locations) do
     RequestModel(GetHashKey(pedCoords['hash']))
@@ -69,15 +70,19 @@ local function createBlip(blipX, blipY, blipZ, radius)
 end
 
 
+
+
 RegisterNUICallback('cancelMission', function(data, cb)
     if missionActive then
         missionActive = false
         currentMissionType = nil
-        createBlip(0, 0, 0, 0) 
+        myVehicle = nil
+        createBlip(0, 0, 0, 0)
         TriggerEvent('QBCore:Notify', "Mission canceled. You can now start a new mission.", "error")
         SendNUIMessage({
             action = 'completeMission'
         })
+        stopVehicleCheckThread()
     else
         TriggerEvent('QBCore:Notify', "No active mission to cancel.", "error")
     end
@@ -86,12 +91,14 @@ end)
 
 
 local function missionStart(missionType)
-
     if currentMissionType then
         TriggerEvent('QBCore:Notify', "You already have an active mission!", "error")
         return
     end
+
     currentMissionType = missionType
+    missionActive = true
+    startVehicleCheckThread()
 
 
     local chosenVehicles = {}
@@ -120,16 +127,15 @@ local function missionStart(missionType)
     local displayName = GetDisplayNameFromVehicleModel(chosenVehicle)
     local vehicleName = GetLabelText(displayName)
 
-    missionActive = true
     TriggerEvent('createVehicle', chosenVehicle, spawnPoint.x, spawnPoint.y, spawnPoint.z)
     TriggerEvent('QBCore:Notify', "The location has been marked, your vehicle: " .. vehicleName, "success")
-
     createBlip(chosenZone.center.x, chosenZone.center.y, chosenZone.center.z, chosenZone.radius)
 
     if missionType == "medium" or missionType == "hard" then
         TriggerServerEvent("s-cartheft:server:spawnNPC", spawnPoint, missionType)
     end
 end
+
 
 
 
@@ -175,6 +181,7 @@ end)
 
 
 
+
 local function PoliceCall()
     local random = math.random(1, 100)
     if random <= Config.PoliceCallChance then
@@ -183,20 +190,22 @@ local function PoliceCall()
 end
 
 local function missionDelivery()
-    local veh = GetVehiclePedIsIn(PlayerPedId(), false)
-    if not veh or veh == 0 then
-        print("No vehicle found.")
+    if not myVehicle then
         return
     end
 
-    local indexLocation = math.random(1, #Config.deliveryLocations)
-    local chosenLocation = Config.deliveryLocations[indexLocation]
-    TriggerEvent('QBCore:Notify', "Deliver the vehicle to the marked location!", "success")
-    SetNewWaypoint(chosenLocation.x, chosenLocation.y)
-    PoliceCall()
+    local veh = GetVehiclePedIsIn(PlayerPedId(), false)
+    if veh == myVehicle then
+        local indexLocation = math.random(1, #Config.deliveryLocations)
+        local chosenLocation = Config.deliveryLocations[indexLocation]
+        TriggerEvent('QBCore:Notify', "Deliver the vehicle to the marked location!", "success")
+        SetNewWaypoint(chosenLocation.x, chosenLocation.y)
+        PoliceCall()
 
-    TriggerEvent("startDeliveryMission", veh, chosenLocation.x, chosenLocation.y, chosenLocation.z, missionType)
+        TriggerEvent("startDeliveryMission", veh, chosenLocation.x, chosenLocation.y, chosenLocation.z, currentMissionType)
+    end
 end
+
 
 local function spawnNPC(coords, missionType)
     local GangNpcModels = {
@@ -229,9 +238,6 @@ local function spawnNPC(coords, missionType)
         npcModels = MilitaryNpcModels
         maxAmount = Config.HardMaxHostileAmount
         weaponList = Config.WeaponList.hard
-    else
-        print("Invalid mission type: " .. tostring(missionType))
-        return
     end
 
     local amount = math.random(1, maxAmount)
@@ -282,6 +288,7 @@ AddEventHandler('startDeliveryMission', function(veh, deliveryX, deliveryY, deli
     local playerPed = PlayerPedId()
     local amount = 0
     missionActive = true
+    myVehicle = veh
 
     if missionType == "hard" then
         amount = Config.HardPayment
@@ -296,18 +303,20 @@ AddEventHandler('startDeliveryMission', function(veh, deliveryX, deliveryY, deli
             Citizen.Wait(1000)
             if IsPedInAnyVehicle(playerPed, false) then
                 local currentVeh = GetVehiclePedIsIn(playerPed, false)
-                if currentVeh == veh then
+                if currentVeh == myVehicle then
                     local playerCoords = GetEntityCoords(playerPed)
                     local dist = Vdist(playerCoords.x, playerCoords.y, playerCoords.z, deliveryX, deliveryY, deliveryZ)
                     if dist < 20.0 then
                         TriggerEvent('QBCore:Notify', "Vehicle delivered successfully, you received your payment!", "success")
-                        if DoesEntityExist(veh) then
-                            DeleteVehicle(currentVeh)
+                        if DoesEntityExist(myVehicle) then
+                            DeleteVehicle(myVehicle)
                         end
                         missionActive = false
                         currentMissionType = nil
-                        createBlip(0, 0, 0, 0) 
+                        myVehicle = nil
+                        createBlip(0, 0, 0, 0)
                         TriggerServerEvent("s-cartheft:server:addMoney", amount)
+                        stopVehicleCheckThread()
                     end
                 end
             end
@@ -316,16 +325,29 @@ AddEventHandler('startDeliveryMission', function(veh, deliveryX, deliveryY, deli
 end)
 
 
-Citizen.CreateThread(function()
-    while true do
-        Citizen.Wait(100)
-        if IsPedInAnyVehicle(PlayerPedId(), false) then
-            local veh = GetVehiclePedIsIn(PlayerPedId(), false)
-            if veh == myVehicle then
-                missionDelivery()
-                break
+function startVehicleCheckThread()
+    if vehicleCheckThread then
+        return
+    end
+
+    vehicleCheckThread = Citizen.CreateThread(function()
+        while missionActive do
+            Citizen.Wait(1000)
+            if IsPedInAnyVehicle(PlayerPedId(), false) then
+                local veh = GetVehiclePedIsIn(PlayerPedId(), false)
+                if veh == myVehicle then
+                    missionDelivery()
+                    break
+                end
             end
         end
-    end
-end)
+        vehicleCheckThread = nil
+    end)
+end
 
+function stopVehicleCheckThread()
+    if vehicleCheckThread then
+        TerminateThread(vehicleCheckThread)
+        vehicleCheckThread = nil
+    end
+end
