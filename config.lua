@@ -1,5 +1,8 @@
 Config = {}
 
+-- if false the mail with car details won't come
+Config.qbPhone = true
+
 -- Cash reward
 Config.EasyPayment = 1000
 Config.MediumPayment = 5000

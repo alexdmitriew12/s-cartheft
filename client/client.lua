@@ -127,14 +127,28 @@ local function missionStart(missionType)
     local displayName = GetDisplayNameFromVehicleModel(chosenVehicle)
     local vehicleName = GetLabelText(displayName)
 
+
     TriggerEvent('createVehicle', chosenVehicle, spawnPoint.x, spawnPoint.y, spawnPoint.z)
+    local plateText = GetVehicleNumberPlateText(myVehicle)
+
     TriggerEvent('QBCore:Notify', "The location has been marked, your vehicle: " .. vehicleName, "success")
+
     createBlip(chosenZone.center.x, chosenZone.center.y, chosenZone.center.z, chosenZone.radius)
+    if Config.qbPhone then
+        Citizen.Wait(5000)
+        TriggerServerEvent('qb-phone:server:sendNewMail', {
+            sender = 'Anonymous',
+            subject = 'Car details',
+            message = 'Model: ' ..vehicleName .. ', Plate: ' ..plateText
+        })
+    end
 
     if missionType == "medium" or missionType == "hard" then
         TriggerServerEvent("s-cartheft:server:spawnNPC", spawnPoint, missionType)
     end
 end
+
+
 
 
 
