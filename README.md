@@ -26,3 +26,4 @@ This script is designed to provide a robust, engaging, and fully customizable ex
 
 ### Preview
 https://www.youtube.com/watch?v=NlRjk3sf3d0
+![Zrzut ekranu (254)](https://github.com/user-attachments/assets/c85282bf-2a9b-4084-9c8e-7d7b2eb88b5f)
